@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>缓存系统基准测试报告 · LRU / LFU / ARC</title>
+<style>
+:root { --bg:#f6f8fb; --card:#fff; --ink:#1a2233; --muted:#5b6577; --rule:#e5e9f0;
+         --a1:#2563eb; --a2:#7c3aed; --a3:#059669; }
+* { box-sizing:border-box; }
+body { margin:0; padding:2rem 1rem; background:var(--bg); color:var(--ink);
+        font-family:-apple-system,'Segoe UI','Microsoft YaHei',sans-serif; line-height:1.7; }
+main { max-width:960px; margin:0 auto; }
+h1 { font-size:2rem; margin:0 0 .3rem; letter-spacing:-.01em; }
+h2 { font-size:1.2rem; margin:2.2rem 0 .8rem; }
+.sub { color:var(--muted); }
+.card { background:var(--card); border:1px solid var(--rule); border-radius:12px;
+         padding:1rem 1.2rem; margin:1rem 0; }
+table { width:100%; border-collapse:collapse; font-variant-numeric:tabular-nums; }
+th,td { padding:.5rem .6rem; border-bottom:1px solid var(--rule); text-align:left; }
+th { color:var(--muted); font-weight:600; font-size:.85rem; }
+td.num,th:not(:first-child) { text-align:right; }
+.muted { color:var(--muted); }
+code { background:#eef2f8; padding:.1rem .35rem; border-radius:5px;
+        font-family:Consolas,monospace; font-size:.9em; }
+footer { margin-top:2.5rem; color:var(--muted); font-size:.85rem;
+          border-top:1px solid var(--rule); padding-top:1rem; }
+</style>
+</head>
+<body>
+<main>
+  <h1>缓存系统基准测试报告</h1>
+  <p class="sub">LRU / LFU / ARC · 自包含报告（由 <code>tools/gen_report.py</code> 从基准程序输出自动生成）</p>
+
+  <h2>1. 容量 - 命中率 / 吞吐（100 万次随机 get/put，zipf 热点）</h2>
+  <div class="card">
+    <table><thead><tr><th>容量</th><th>命中率</th><th>耗时 ms</th><th>吞吐 Mops/s</th></tr></thead><tbody><tr><td class='num'>2</td><td class='num'>25.10%</td><td class='num'>38.8</td><td class='num'>25.8</td></tr><tr><td class='num'>3</td><td class='num'>36.20%</td><td class='num'>38.8</td><td class='num'>25.8</td></tr><tr><td class='num'>5</td><td class='num'>52.52%</td><td class='num'>36.5</td><td class='num'>27.4</td></tr><tr><td class='num'>10</td><td class='num'>75.83%</td><td class='num'>34.2</td><td class='num'>29.3</td></tr><tr><td class='num'>20</td><td class='num'>99.99%</td><td class='num'>28.3</td><td class='num'>35.3</td></tr><tr><td class='num'>50</td><td class='num'>99.99%</td><td class='num'>28.1</td><td class='num'>35.5</td></tr><tr><td class='num'>100</td><td class='num'>99.99%</td><td class='num'>28.4</td><td class='num'>35.2</td></tr></tbody></table>
+    <div style="margin-top:1rem"><svg viewBox='0 0 620 224' width='100%' style='max-width:620px' role='img'><text x='0' y='15' font-size='12' fill='#5b6577'>2</text><rect x='48' y='0' width='125' height='22' rx='3' fill='#2563eb'/><text x='179' y='15' font-size='12' fill='#1a2233'>25.10%</text><text x='0' y='47' font-size='12' fill='#5b6577'>3</text><rect x='48' y='32' width='181' height='22' rx='3' fill='#2563eb'/><text x='235' y='47' font-size='12' fill='#1a2233'>36.20%</text><text x='0' y='79' font-size='12' fill='#5b6577'>5</text><rect x='48' y='64' width='262' height='22' rx='3' fill='#2563eb'/><text x='316' y='79' font-size='12' fill='#1a2233'>52.52%</text><text x='0' y='111' font-size='12' fill='#5b6577'>10</text><rect x='48' y='96' width='379' height='22' rx='3' fill='#2563eb'/><text x='433' y='111' font-size='12' fill='#1a2233'>75.83%</text><text x='0' y='143' font-size='12' fill='#5b6577'>20</text><rect x='48' y='128' width='500' height='22' rx='3' fill='#2563eb'/><text x='554' y='143' font-size='12' fill='#1a2233'>99.99%</text><text x='0' y='175' font-size='12' fill='#5b6577'>50</text><rect x='48' y='160' width='500' height='22' rx='3' fill='#2563eb'/><text x='554' y='175' font-size='12' fill='#1a2233'>99.99%</text><text x='0' y='207' font-size='12' fill='#5b6577'>100</text><rect x='48' y='192' width='500' height='22' rx='3' fill='#2563eb'/><text x='554' y='207' font-size='12' fill='#1a2233'>99.99%</text></svg></div>
+    <p class="muted">命中率随容量单调上升；容量 ≥ 热点数时接近 100%。吞吐不随容量衰减，佐证 get/put 为 O(1)。</p>
+  </div>
+
+  <h2>2. LRU vs LFU（偶发冷扫描 + 稳定热点）</h2>
+  <div class="card">
+    <table><thead><tr><th>缓存</th><th>整体命中率</th><th>热点命中率</th></tr></thead><tbody><tr><td class='num'>LRU</td><td class='num'>0.00%</td><td class='num'>0.00%</td></tr><tr><td class='num'>LFU</td><td class='num'>8.18%</td><td class='num'>90.00%</td></tr></tbody></table>
+    <p class="muted">LFU 抗缓存污染：热点命中率显著高于 LRU。</p>
+  </div>
+
+  <h2>3. ARC vs LRU vs LFU（循环扫描 + 局部热点）</h2>
+  <div class="card">
+    <table><thead><tr><th>缓存</th><th>命中率</th></tr></thead><tbody><tr><td class='num'>LRU</td><td class='num'>43.86%</td></tr><tr><td class='num'>LFU</td><td class='num'>59.95%</td></tr><tr><td class='num'>ARC</td><td class='num'>59.95%</td></tr></tbody></table>
+    <p class="muted">ARC 融合近期/频繁局部性，命中率不低于 LRU。</p>
+  </div>
+
+  <h2>4. 相位切换负载（热点集合整体切换 + 扫描污染）</h2>
+  <div class="card">
+    <table><thead><tr><th>缓存</th><th>命中率</th></tr></thead><tbody><tr><td class='num'>LRU</td><td class='num'>57.94%</td></tr><tr><td class='num'>LFU</td><td class='num'>28.93%</td></tr><tr><td class='num'>ARC</td><td class='num'>68.36%</td></tr></tbody></table>
+    <p class="muted">LFU 因「频次固化」滞后；ARC 靠指针 p 与 B1/B2 幽灵列表及时跟进新热点。</p>
+  </div>
+
+  <h2>5. ShardedLRUCache 并发吞吐（分片数 × 线程数）</h2>
+  <div class="card">
+    <table><thead><tr><th>分片\线程</th><th>1</th><th>2</th><th>4</th><th>8</th></tr></thead><tbody><tr><td class='num'>1</td><td class='num'>28.20</td><td class='num'>9.62</td><td class='num'>10.26</td><td class='num'>6.51</td></tr><tr><td class='num'>2</td><td class='num'>28.74</td><td class='num'>9.89</td><td class='num'>7.33</td><td class='num'>4.59</td></tr><tr><td class='num'>4</td><td class='num'>29.70</td><td class='num'>12.18</td><td class='num'>8.91</td><td class='num'>6.04</td></tr><tr><td class='num'>8</td><td class='num'>31.78</td><td class='num'>16.65</td><td class='num'>13.47</td><td class='num'>9.36</td></tr><tr><td class='num'>16</td><td class='num'>32.61</td><td class='num'>21.17</td><td class='num'>16.82</td><td class='num'>13.14</td></tr></tbody></table>
+    <p class="muted">单位 Mops/s。数值受本机核数影响，仅示意扩展趋势：分片越多，并发吞吐扩展越好；分片数 = 1（单把锁）在并发下受限。</p>
+  </div>
+
+  <footer>
+    生成时间：2026-10-12 17:15:52 ｜ 复现：<code>cmake --build build --target report</code>
+    （或先构建后运行 <code>python tools/gen_report.py</code>）
+  </footer>
+</main>
+</body>
+</html>
